@@ -3,109 +3,137 @@
 <head>
 <meta charset="UTF-8">
 <title>个税工资计算器</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,'Microsoft YaHei',sans-serif;max-width:750px;margin:0 auto;padding:24px;color:#2c2c2a;background:#f5f5f5}
+body{font-family:-apple-system,'Microsoft YaHei',sans-serif;max-width:950px;margin:0 auto;padding:24px;color:#2c2c2a;background:#f5f5f5}
 h1{font-size:22px;margin-bottom:4px}.sub{color:#888;font-size:13px;margin-bottom:20px}
 .card{background:#fff;border-radius:10px;padding:18px;margin-bottom:16px;border:1px solid #e0e0e0}
 .card h2{font-size:15px;margin-bottom:10px;color:#185FA5}
 .btn-back{background:#888;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;margin-bottom:16px}
 label{font-size:12px;color:#888;margin:6px 0 2px;display:block}
 input,select{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px}
-button{padding:10px 20px;background:#378ADD;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;margin-top:12px}
+button{padding:10px 16px;background:#378ADD;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;margin-top:8px}
 button:hover{background:#185FA5}
-.flex2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn-sm{padding:6px 14px;font-size:12px;margin-top:8px;background:#0F6E56}
+.btn-sm:hover{background:#085041}
 .result{background:#f8f8f8;padding:16px;border-radius:8px;margin-top:12px;font-size:14px;line-height:2.2}
-.result .num{font-size:20px;font-weight:600;color:#A32D2D}
-.result .ok{color:#0F6E56}
+.num{font-size:20px;font-weight:600;color:#A32D2D}
+.ok{color:#0F6E56}
 table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
-th{background:#f0f0f0;padding:8px;text-align:left;font-weight:600;color:#555}
+th{background:#f0f0f0;padding:8px;text-align:left;font-weight:600;color:#555;border-bottom:1px solid #ddd;white-space:nowrap}
 td{padding:7px 8px;border-bottom:1px solid #eee}
+.summary{display:flex;gap:12px;margin:12px 0;flex-wrap:wrap}
+.sitem{flex:1;min-width:120px;background:#f8f8f8;padding:12px;border-radius:8px;text-align:center}
+.sitem .num{font-size:24px;font-weight:600;color:#185FA5}
 </style>
 </head>
 <body>
 <button class="btn-back" onclick="location.href='index.html'">← 返回首页</button>
 <h1>个税工资计算器</h1>
-<p class="sub">累计预扣法 — 填月工资自动算每月个税</p>
+<p class="sub">上传全员工资表 Excel → 批量算个税 → 导出结果</p>
 
 <div class="card">
-  <h2>1. 基本信息</h2>
-  <div class="flex2">
-    <div><label>月税前工资</label><input type="number" id="salary" value="15000" oninput="calc()"></div>
-    <div><label>社保公积金（个人部分/月）</label><input type="number" id="socialIns" value="3000" oninput="calc()"></div>
-  </div>
-  <div class="flex2">
-    <div><label>专项附加扣除/月</label><input type="number" id="spDeduction" value="3000" placeholder="子女教育+房贷+赡养老人等合计"></div>
-    <div><label>当前月份（1-12）</label><select id="month" onchange="calc()"><option value="1">1月</option><option value="2">2月</option><option value="3">3月</option><option value="4">4月</option><option value="5">5月</option><option value="6">6月</option><option value="7">7月</option><option value="8">8月</option><option value="9">9月</option><option value="10">10月</option><option value="11">11月</option><option value="12">12月</option></select></div>
-  </div>
-  <button onclick="showAllMonths()">显示全年12个月明细</button>
+  <h2>1. 导入工资表</h2>
+  <p style="font-size:12px;color:#888;margin-bottom:8px">Excel 需包含列：<b>姓名、税前工资、社保公积金、专项附加扣除、当前月份</b>（月份填1-12）<br>或者直接加载模拟数据看效果</p>
+  <input type="file" id="salaryFile" accept=".csv,.xls,.xlsx">
+  <button class="btn-sm" onclick="loadDemo()">加载模拟数据（5人）</button>
+  <p style="font-size:11px;color:#888;margin-top:4px" id="fileInfo"></p>
 </div>
 
-<div class="card">
-  <h2>2. 本月计算</h2>
-  <div class="result" id="monthResult"><p>请输入数据后自动计算</p></div>
-</div>
-
-<div class="card" id="allMonthsCard" style="display:none">
-  <h2>3. 全年累计明细</h2>
-  <div id="allMonthsTable"></div>
+<div class="card" id="resultCard" style="display:none">
+  <h2>2. 计算结果</h2>
+  <div class="summary" id="summary"></div>
+  <div style="overflow-x:auto" id="detailTable"></div>
+  <button onclick="exportExcel()">导出 Excel（个税申报底稿）</button>
 </div>
 
 <script>
-// Tax brackets
 const BRACKETS=[[0,36000,0.03,0],[36000,144000,0.1,2520],[144000,300000,0.2,16920],[300000,420000,0.25,31920],[420000,660000,0.3,52920],[660000,960000,0.35,85920],[960000,Infinity,0.45,181920]];
 
-function calcTax(cumulativeTaxable){for(const[b,ub,r,qd]of BRACKETS){if(cumulativeTaxable<=ub)return cumulativeTaxable*r-qd}return 0}
+function calcTax(acc){for(const[b,ub,r,qd]of BRACKETS)if(acc<=ub)return acc*r-qd;return 0}
 
-function calcSingle(month,salary,social,spDed){
-  const basicDed=5000;
-  const monthlyTaxable=salary-social-spDed-basicDed;
-  const cumulative=monthlyTaxable*month;
-  const cumulativeTax=calcTax(cumulative);
-  let prevTax=0;
-  if(month>1){
-    const prevCum=monthlyTaxable*(month-1);
-    prevTax=calcTax(prevCum);
-  }
-  return {monthlyTaxable,cumulative,cumulativeTax,monthTax:cumulativeTax-prevTax,prevTax,netPay:salary-social-(cumulativeTax-prevTax)};
+const DEMO=`姓名,税前工资,社保公积金,专项附加扣除,月份
+张三,15000,3000,3000,7
+李四,22000,4400,2000,7
+王五,8000,1600,1000,7
+赵六,35000,7000,4000,7
+陈七,12000,2400,1500,7`;
+
+function parseCSV(csv){const l=csv.trim().split('\n'),h=l[0].split(',').map(x=>x.trim());return l.slice(1).map(r=>{const v=r.split(','),o={};h.forEach((x,i)=>o[x]=(v[i]||'').trim());return o})}
+function parseExcel(data){const wb=XLSX.read(data,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],json=XLSX.utils.sheet_to_json(ws,{header:1}),h=json[0].map(x=>String(x||'').trim());return json.slice(1).filter(r=>r.length>0).map(r=>{const o={};h.forEach((x,i)=>o[x]=String(r[i]||'').trim());return o})}
+
+let empData=[];
+
+document.getElementById('salaryFile').addEventListener('change',function(e){
+  const f=e.target.files[0],r=new FileReader();
+  r.onload=ev=>{empData=f.name.endsWith('.csv')?parseCSV(ev.target.result):parseExcel(ev.target.result);document.getElementById('fileInfo').textContent=`已导入 ${empData.length} 人`;runAll()}
+  f.name.endsWith('.csv')?r.readAsText(f):r.readAsArrayBuffer(f);
+});
+
+function loadDemo(){empData=parseCSV(DEMO);document.getElementById('fileInfo').textContent='已加载模拟数据：5人';runAll()}
+
+function g(row,keys){for(const k of keys)if(row[k]!==undefined)return parseFloat(row[k])||0;return 0}
+
+function runAll(){
+  if(!empData.length)return alert('请先导入数据');
+  const results=[];
+  empData.forEach(row=>{
+    const name=row['姓名']||row['name']||'';
+    const salary=g(row,['税前工资','月薪','salary','工资']);
+    const social=g(row,['社保公积金','社保','social','insurance']);
+    const spDed=g(row,['专项附加扣除','专项扣除','spDeduction','deduction']);
+    const month=parseInt(g(row,['月份','当月月份','month']));
+    const basicDed=5000;
+    const monthlyTaxable=salary-social-spDed-basicDed;
+    const cumulative=monthlyTaxable*month;
+    const cumTax=calcTax(cumulative);
+    let prevTax=0;
+    if(month>1)prevTax=calcTax(monthlyTaxable*(month-1));
+    const monthTax=cumTax-prevTax;
+    results.push({name,salary,social,spDed,month,monthlyTaxable,cumulative,cumTax,prevTax,monthTax,netPay:salary-social-monthTax});
+  });
+
+  const totalTax=results.reduce((s,r)=>s+r.monthTax,0);
+  const totalNet=results.reduce((s,r)=>s+r.netPay,0);
+  const totalSalary=results.reduce((s,r)=>s+r.salary,0);
+
+  document.getElementById('summary').innerHTML=`
+    <div class="sitem"><div class="num">${results.length}</div><div class="lbl">人数</div></div>
+    <div class="sitem"><div class="num">${(totalSalary/10000).toFixed(1)}万</div><div class="lbl">税前工资合计</div></div>
+    <div class="sitem"><div class="num" style="color:#A32D2D">${totalTax.toFixed(2)}</div><div class="lbl">本月个税合计</div></div>
+    <div class="sitem"><div class="num" style="color:#0F6E56">${(totalNet/10000).toFixed(1)}万</div><div class="lbl">实发工资合计</div></div>`;
+
+  let html=`<table><tr><th>姓名</th><th>税前工资</th><th>社保</th><th>专项扣除</th><th>月份</th><th style="text-align:right">应纳税所得额</th><th style="text-align:right">累计所得额</th><th style="text-align:right">累计个税</th><th style="text-align:right">本月个税</th><th style="text-align:right">实发工资</th></tr>`;
+  results.forEach(r=>html+=`<tr><td>${r.name}</td><td>${r.salary.toFixed(2)}</td><td>${r.social.toFixed(2)}</td><td>${r.spDed.toFixed(2)}</td><td>${r.month}月</td><td style="text-align:right">${r.monthlyTaxable.toFixed(2)}</td><td style="text-align:right">${r.cumulative.toFixed(2)}</td><td style="text-align:right">${r.cumTax.toFixed(2)}</td><td style="text-align:right;font-weight:500;color:#A32D2D">${r.monthTax.toFixed(2)}</td><td style="text-align:right;font-weight:500;color:#0F6E56">${r.netPay.toFixed(2)}</td></tr>`);
+  html+=`<tr style="font-weight:500;border-top:2px solid #999"><td>合计</td><td>${totalSalary.toFixed(2)}</td><td></td><td></td><td></td><td></td><td></td><td></td><td style="text-align:right;color:#A32D2D">${totalTax.toFixed(2)}</td><td style="text-align:right;color:#0F6E56">${totalNet.toFixed(2)}</td></tr></table>`;
+  document.getElementById('detailTable').innerHTML=html;
+  document.getElementById('resultCard').style.display='block';
+  document.getElementById('resultCard').scrollIntoView({behavior:'smooth'});
 }
 
-function calc(){
-  const salary=parseFloat(document.getElementById('salary').value)||0;
-  const social=parseFloat(document.getElementById('socialIns').value)||0;
-  const spDed=parseFloat(document.getElementById('spDeduction').value)||0;
-  const month=parseInt(document.getElementById('month').value);
-
-  const r=calcSingle(month,salary,social,spDed);
-  document.getElementById('monthResult').innerHTML=`
-    <p>税前工资：<strong>¥${salary.toFixed(2)}</strong> | 社保公积金：¥${social.toFixed(2)} | 专项扣除：¥${spDed.toFixed(2)}</p>
-    <p>减除费用（起征点）：¥5,000.00/月</p>
-    <p>本月应纳税所得额：<strong>¥${r.monthlyTaxable.toFixed(2)}</strong></p>
-    <p>累计应纳税所得额（${month}个月）：<strong>¥${r.cumulative.toFixed(2)}</strong></p>
-    <hr style="margin:8px 0">
-    <p>累计应纳个税：<span style="font-size:16px">¥${r.cumulativeTax.toFixed(2)}</span></p>
-    <p>已预缴个税：<span style="font-size:16px">¥${r.prevTax.toFixed(2)}</span></p>
-    <p>本月应扣个税：<span class="num">¥${r.monthTax.toFixed(2)}</span></p>
-    <p>本月实发工资：<span class="ok" style="font-size:20px;font-weight:600">¥${r.netPay.toFixed(2)}</span></p>
-    <p style="font-size:11px;color:#888">分录：借 应付职工薪酬 ${salary.toFixed(2)} / 贷 银行存款 ${r.netPay.toFixed(2)} 其他应付款-社保 ${social.toFixed(2)} 应交税费-个税 ${r.monthTax.toFixed(2)}</p>`;
+function exportExcel(){
+  if(!empData.length)return;
+  const wb=XLSX.utils.book_new();
+  const h=['姓名','税前工资','社保公积金','专项附加扣除','月份','应纳税所得额','累计所得额','累计个税','本月个税','实发工资'];
+  const rows=[h];
+  empData.forEach(row=>{
+    const name=row['姓名']||row['name']||'';
+    const salary=g(row,['税前工资','月薪','salary','工资']);
+    const social=g(row,['社保公积金','社保','social']);
+    const spDed=g(row,['专项附加扣除','专项扣除','deduction']);
+    const month=parseInt(g(row,['月份','month']));
+    const monthlyTaxable=salary-social-spDed-5000;
+    const cum=monthlyTaxable*month;
+    const ct=calcTax(cum);
+    const prev=month>1?calcTax(monthlyTaxable*(month-1)):0;
+    rows.push([name,salary,social,spDed,month,monthlyTaxable.toFixed(2),cum.toFixed(2),ct.toFixed(2),(ct-prev).toFixed(2),(salary-social-(ct-prev)).toFixed(2)]);
+  });
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:10},{wch:12},{wch:10},{wch:10},{wch:6},{wch:14},{wch:14},{wch:12},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,'个税计算');
+  XLSX.writeFile(wb,'个税申报底稿.xlsx');
 }
-
-function showAllMonths(){
-  const salary=parseFloat(document.getElementById('salary').value)||0;
-  const social=parseFloat(document.getElementById('socialIns').value)||0;
-  const spDed=parseFloat(document.getElementById('spDeduction').value)||0;
-  let html=`<table><tr><th>月份</th><th>累计应纳税所得额</th><th style="text-align:right">累计个税</th><th style="text-align:right">已预缴</th><th style="text-align:right">本月个税</th><th style="text-align:right">实发工资</th></tr>`;
-  let cumTax=0;
-  for(let m=1;m<=12;m++){
-    const r=calcSingle(m,salary,social,spDed);
-    html+=`<tr><td>${m}月</td><td>${r.cumulative.toFixed(2)}</td><td style="text-align:right">${r.cumulativeTax.toFixed(2)}</td><td style="text-align:right">${r.prevTax.toFixed(2)}</td><td style="text-align:right;font-weight:500;color:#A32D2D">${r.monthTax.toFixed(2)}</td><td style="text-align:right;color:#0F6E56">${r.netPay.toFixed(2)}</td></tr>`;
-  }
-  html+='</table>';
-  document.getElementById('allMonthsTable').innerHTML=html;
-  document.getElementById('allMonthsCard').style.display='block';
-  document.getElementById('allMonthsCard').scrollIntoView({behavior:'smooth'});
-}
-calc();
 </script>
 </body>
 </html>
