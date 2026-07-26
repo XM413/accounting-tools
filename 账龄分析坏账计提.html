@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>账龄分析与坏账计提</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Microsoft YaHei',sans-serif;max-width:900px;margin:0 auto;padding:24px;color:#2c2c2a;background:#f5f5f5}
+h1{font-size:22px;margin-bottom:4px}
+.sub{color:#888;font-size:13px;margin-bottom:20px}
+.card{background:#fff;border-radius:10px;padding:18px;margin-bottom:16px;border:1px solid #e0e0e0}
+.card h2{font-size:15px;margin-bottom:10px;color:#185FA5}
+input[type=file],select{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;margin-top:4px}
+label{display:block;font-size:12px;color:#888;margin:8px 0 4px}
+button{padding:10px 20px;background:#378ADD;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;margin-top:12px}
+button:hover{background:#185FA5}
+.btn-sm{padding:6px 14px;font-size:12px;margin-top:8px;background:#0F6E56}
+.btn-sm:hover{background:#085041}
+.btn-back{background:#888;margin-top:0;padding:6px 14px;font-size:12px;margin-bottom:16px}
+.btn-back:hover{background:#666}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}
+th{background:#f0f0f0;padding:8px;text-align:left;font-weight:600;color:#555;border-bottom:2px solid #ddd}
+td{padding:7px 8px;border-bottom:1px solid #eee}
+.warn{color:#A32D2D;font-weight:500}
+.ok{color:#0F6E56}
+.amber{color:#854F0B}
+.summary{display:flex;gap:12px;margin:12px 0;flex-wrap:wrap}
+.sitem{flex:1;min-width:120px;background:#f8f8f8;padding:12px;border-radius:8px;text-align:center}
+.sitem .num{font-size:24px;font-weight:600}
+.sitem .lbl{font-size:11px;color:#888}
+.flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.flex input{width:80px;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+<button class="btn-back" onclick="location.href='index.html'">← 返回首页</button>
+<h1>账龄分析与坏账计提</h1>
+<p class="sub">上传应收明细 → 自动算账龄 → 分区间 → 计提坏账</p>
+
+<div class="card">
+  <h2>1. 导入应收明细</h2>
+  <input type="file" id="arFile" accept=".csv,.xls,.xlsx">
+  <button class="btn-sm" onclick="loadDemo()">加载模拟数据</button>
+  <label>基准日 <input type="date" id="baseDate" style="width:160px;display:inline;margin-left:8px"></label>
+  <button onclick="runAging()">开始分析</button>
+</div>
+
+<div class="card">
+  <h2>2. 计提比例设置</h2>
+  <div class="flex" id="rateConfig">
+    <span>信用期内:</span><input value="1" id="r0">%<span>1-30天:</span><input value="2" id="r1">%<span>31-60天:</span><input value="5" id="r2">%<span>61-90天:</span><input value="20" id="r3">%<span>90天+:</span><input value="50" id="r4">%
+  </div>
+</div>
+
+<div class="card" id="resultCard" style="display:none">
+  <h2>3. 分析结果</h2>
+  <div class="summary" id="summary"></div>
+  <div id="detailTable"></div>
+  <div style="margin-top:12px;font-size:14px" id="journalEntry"></div>
+  <button onclick="exportExcel()">导出 Excel</button>
+</div>
+
+<script>
+let arData = [];
+const DEMO = `客户,发票号,金额,开票日期,到期日期
+甲公司,INV-001,50000,2026-07-01,2026-07-31
+甲公司,INV-005,120000,2026-06-20,2026-07-20
+乙公司,INV-002,80000,2026-05-10,2026-06-10
+丙公司,INV-003,200000,2026-03-25,2026-04-25
+丁公司,INV-004,10000,2026-07-15,2026-08-15`;
+
+function parseCSV(csv){const l=csv.trim().split('\n'),h=l[0].split(',').map(x=>x.trim());return l.slice(1).map(r=>{const v=r.split(','),o={};h.forEach((x,i)=>o[x]=(v[i]||'').trim());return o})}
+function parseExcel(data){const wb=XLSX.read(data,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],json=XLSX.utils.sheet_to_json(ws,{header:1}),h=json[0].map(x=>String(x||'').trim());return json.slice(1).filter(r=>r.length>0).map(r=>{const o={};h.forEach((x,i)=>o[x]=String(r[i]||'').trim());return o})}
+
+document.getElementById('arFile').addEventListener('change',function(e){
+  const f=e.target.files[0],r=new FileReader();
+  r.onload=ev=>{arData=f.name.endsWith('.csv')?parseCSV(ev.target.result):parseExcel(ev.target.result);alert(`已导入 ${arData.length} 笔应收`)}
+  f.name.endsWith('.csv')?r.readAsText(f):r.readAsArrayBuffer(f);
+});
+document.getElementById('baseDate').value = new Date().toISOString().split('T')[0];
+
+function loadDemo(){arData=parseCSV(DEMO);alert(`已加载模拟数据：${arData.length} 笔应收`)}
+
+function getRates(){return [0,1,2,3,4].map(i=>parseFloat(document.getElementById('r'+i).value)/100)}
+
+function runAging(){
+  if(!arData.length){alert('请先导入应收数据');return}
+  const baseDt=new Date(document.getElementById('baseDate').value),rates=getRates();
+  const intervals=['信用期内','1-30天','31-60天','61-90天','90天+'];
+  const totals=[0,0,0,0,0],counts=[0,0,0,0,0];
+  const rows=[];
+
+  arData.forEach(r=>{
+    const dt=r['到期日期']||r['到期日']||r['due_date'];
+    if(!dt) return;
+    const parts=dt.split(/[-\/]/),due=new Date(+parts[0],parts[1]-1,parts[2]);
+    const days=Math.floor((baseDt-due)/(1000*60*60*24));
+    let idx=0;
+    if(days<=0) idx=0; else if(days<=30) idx=1; else if(days<=60) idx=2; else if(days<=90) idx=3; else idx=4;
+    const amt=parseFloat(r['金额']||r['amount']||0);
+    const provision=amt*rates[idx];
+    const cls=idx>=3?'warn':idx>=2?'amber':'ok';
+    totals[idx]+=amt;counts[idx]++;rows.push({客户:r['客户']||r['company'],发票号:r['发票号']||r['invoice'],金额:amt,账龄天数:days,区间:intervals[idx],计提率:(rates[idx]*100).toFixed(0)+'%',坏账准备:provision,cls:cls});
+  });
+
+  let html='<table><tr><th>客户</th><th>发票号</th><th style="text-align:right">金额</th><th style="text-align:center">账龄天数</th><th>区间</th><th style="text-align:center">计提率</th><th style="text-align:right">坏账准备</th></tr>';
+  rows.forEach(r=>html+=`<tr><td>${r.客户}</td><td>${r.发票号}</td><td style="text-align:right">${r.金额.toFixed(2)}</td><td style="text-align:center;color:${r.cls==='ok'?'#0F6E56':r.cls==='amber'?'#854F0B':'#A32D2D'}">${r.账龄天数}天</td><td class="${r.cls}">${r.区间}</td><td style="text-align:center">${r.计提率}</td><td style="text-align:right;font-weight:500">${r.坏账准备.toFixed(2)}</td></tr>`);
+  html+=`<tr style="font-weight:500;border-top:2px solid #999"><td colspan="2">各区间汇总</td><td style="text-align:right">${rows.reduce((s,r)=>s+r.金额,0).toFixed(2)}</td><td></td><td></td><td></td><td style="text-align:right;color:#A32D2D">${rows.reduce((s,r)=>s+r.坏账准备,0).toFixed(2)}</td></tr></table>`;
+  document.getElementById('detailTable').innerHTML=html;
+
+  const totalProv=rows.reduce((s,r)=>s+r.坏账准备,0);
+  let summaryHTML=intervals.map((iv,i)=>`<div class="sitem"><div class="num">${counts[i]}</div><div class="lbl">${iv}<br>${(totals[i]/10000).toFixed(1)}万</div></div>`).join('');
+  summaryHTML+=`<div class="sitem" style="background:#fdf0f0"><div class="num" style="color:#A32D2D">${totalProv.toFixed(0)}</div><div class="lbl">坏账准备合计</div></div>`;
+  document.getElementById('summary').innerHTML=summaryHTML;
+  document.getElementById('journalEntry').innerHTML=`<strong>分录：</strong>借 信用减值损失 ${totalProv.toFixed(2)} / 贷 坏账准备 ${totalProv.toFixed(2)}`;
+  document.getElementById('resultCard').style.display='block';document.getElementById('resultCard').scrollIntoView({behavior:'smooth'});
+}
+
+function exportExcel(){
+  const wb=XLSX.utils.book_new(),baseDt=document.getElementById('baseDate').value,rates=getRates();
+  const intervals=['信用期内','1-30天','31-60天','61-90天','90天+'];
+  const tData=[['账龄区间','余额合计','计提比例','坏账准备']];
+  let gp=[0,0,0,0,0],totalProv=0;
+  arData.forEach(r=>{
+    const dt=r['到期日期']||r['到期日']||r['due_date'];if(!dt)return;
+    const parts=dt.split(/[-\/]/),due=new Date(+parts[0],parts[1]-1,parts[2]);
+    const days=Math.floor((new Date(baseDt)-due)/(1000*60*60*24));
+    let idx=days<=0?0:days<=30?1:days<=60?2:days<=90?3:4;
+    gp[idx]+=parseFloat(r['金额']||0);
+  });
+  intervals.forEach((iv,i)=>{const p=gp[i]*rates[i];totalProv+=p;tData.push([iv,gp[i].toFixed(2),(rates[i]*100).toFixed(0)+'%',p.toFixed(2)])});
+  tData.push(['合计','','',totalProv.toFixed(2)]);
+  const ws1=XLSX.utils.aoa_to_sheet(tData);ws1['!cols']=[{wch:15},{wch:15},{wch:12},{wch:15}];XLSX.utils.book_append_sheet(wb,ws1,'坏账计提汇总');
+  
+  const dData=[['客户','发票号','金额','账龄天数','区间','计提率','坏账准备']];
+  arData.forEach(r=>{
+    const dt=r['到期日期']||r['到期日']||r['due_date'];if(!dt)return;
+    const parts=dt.split(/[-\/]/),due=new Date(+parts[0],parts[1]-1,parts[2]);
+    const days=Math.floor((new Date(baseDt)-due)/(1000*60*60*24));
+    let idx=days<=0?0:days<=30?1:days<=60?2:days<=90?3:4;
+    dData.push([r['客户']||'',r['发票号']||'',parseFloat(r['金额']||0),days,intervals[idx],(rates[idx]*100).toFixed(0)+'%',(parseFloat(r['金额']||0)*rates[idx]).toFixed(2)]);
+  });
+  const ws2=XLSX.utils.aoa_to_sheet(dData);ws2['!cols']=[{wch:12},{wch:14},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12}];XLSX.utils.book_append_sheet(wb,ws2,'明细');
+  XLSX.writeFile(wb,'账龄分析与坏账计提.xlsx');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>会计实用工具集</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Microsoft YaHei',sans-serif;max-width:720px;margin:0 auto;padding:32px 24px;color:#2c2c2a;background:#f5f5f5}
+h1{font-size:24px;margin-bottom:4px}
+.sub{color:#888;margin-bottom:32px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.tool{background:#fff;border-radius:12px;padding:20px;border:1px solid #e0e0e0;text-decoration:none;color:inherit;transition:transform .1s}
+.tool:hover{transform:translateY(-2px);border-color:#378ADD}
+.tool h2{font-size:16px;color:#185FA5;margin-bottom:6px}
+.tool p{font-size:13px;color:#666;line-height:1.6}
+.tool .tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;margin-top:8px}
+.tag-bank{background:#e6f7e6;color:#0F6E56}.tag-ar{background:#fdf0e6;color:#854F0B}.tag-audit{background:#f0e6fd;color:#534AB7}
+</style>
+</head>
+<body>
+<h1>会计实用工具集</h1>
+<p class="sub">四个日常高频工具，上传 Excel 就能用。全部在浏览器里跑，不传服务器。</p>
+
+<div class="grid">
+  <a href="银行对账匹配器.html" class="tool">
+    <h2>银行对账匹配器</h2>
+    <p>上传银行对账单和公司日记账，自动匹配找出未达账项，导出余额调节表</p>
+    <span class="tag tag-bank">出纳</span>
+  </a>
+  <a href="账龄分析坏账计提.html" class="tool">
+    <h2>账龄分析与坏账计提</h2>
+    <p>上传应收明细，自动算账龄天数、划分区间、计提坏账准备</p>
+    <span class="tag tag-ar">AR</span>
+  </a>
+  <a href="审计随机抽样.html" class="tool">
+    <h2>审计随机抽样</h2>
+    <p>上传凭证清单，MUS/随机/大金额三种方法，输出抽样底稿</p>
+    <span class="tag tag-audit">审计</span>
+  </a>
+</div>
+</body>
+</html>
