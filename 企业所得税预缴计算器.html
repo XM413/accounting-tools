@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>企业所得税预缴计算器</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Microsoft YaHei',sans-serif;max-width:700px;margin:0 auto;padding:24px;color:#2c2c2a;background:#f5f5f5}
+h1{font-size:22px;margin-bottom:4px}.sub{color:#888;font-size:13px;margin-bottom:20px}
+.card{background:#fff;border-radius:10px;padding:18px;margin-bottom:16px;border:1px solid #e0e0e0}
+.card h2{font-size:15px;margin-bottom:10px;color:#185FA5}
+.btn-back{background:#888;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;margin-bottom:16px}
+label{font-size:12px;color:#888;margin:6px 0 2px;display:block}
+input,select{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px}
+button{padding:10px 20px;background:#378ADD;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;margin-top:12px}
+button:hover{background:#185FA5}
+.flex2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.result{background:#f8f8f8;padding:16px;border-radius:8px;margin-top:12px;font-size:14px;line-height:2.2}
+.result .num{font-size:20px;font-weight:600;color:#A32D2D}
+.result .ok{color:#0F6E56}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+th{background:#f0f0f0;padding:8px;text-align:left;font-weight:600;color:#555}
+td{padding:7px 8px;border-bottom:1px solid #eee}
+</style>
+</head>
+<body>
+<button class="btn-back" onclick="location.href='index.html'">← 返回首页</button>
+<h1>企业所得税季度预缴计算器</h1>
+<p class="sub">填累计利润 → 自动算应预缴金额</p>
+
+<div class="card">
+  <h2>1. 基本信息</h2>
+  <div class="flex2">
+    <div><label>当前季度</label><select id="quarter" onchange="calc()"><option value="1">第1季度</option><option value="2">第2季度</option><option value="3">第3季度</option><option value="4">第4季度</option></select></div>
+    <div><label>适用税率</label><select id="rate" onchange="calc()"><option value="0.25">25%（一般企业）</option><option value="0.20">20%（小型微利）</option><option value="0.15">15%（高新/西部）</option></select></div>
+  </div>
+  <div class="flex2">
+    <div><label>本年累计利润总额</label><input type="number" id="cumProfit" value="800000" oninput="calc()"></div>
+    <div><label>以前季度已预缴所得税</label><input type="number" id="prevPaid" value="120000" oninput="calc()"></div>
+  </div>
+  <div class="flex2">
+    <div><label>不征税收入/免税收入</label><input type="number" id="exemptIncome" value="0" oninput="calc()"></div>
+    <div><label>弥补以前年度亏损</label><input type="number" id="lossComp" value="0" oninput="calc()"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>2. 计算结果</h2>
+  <div class="result" id="citResult"><p>请输入数据</p></div>
+</div>
+
+<div class="card" id="annualCard" style="display:none">
+  <h2>3. 汇算清缴——常见纳税调整项目</h2>
+  <p style="font-size:12px;color:#888;margin-bottom:10px">预估年度汇算清缴时可能涉及的调整（填入全年估计数）</p>
+  <table>
+    <tr><th>调整项目</th><th style="text-align:right">金额</th><th>说明</th></tr>
+    <tr><td>业务招待费调增</td><td style="text-align:right"><input type="number" id="adjEntertain" value="0" style="width:120px" oninput="calcAnnual()"></td><td style="font-size:11px;color:#888">发生额60% vs 收入5‰取孰低</td></tr>
+    <tr><td>广告宣传费调增</td><td style="text-align:right"><input type="number" id="adjAd" value="0" style="width:120px" oninput="calcAnnual()"></td><td style="font-size:11px;color:#888">超收入15%部分</td></tr>
+    <tr><td>罚款滞纳金</td><td style="text-align:right"><input type="number" id="adjPenalty" value="0" style="width:120px" oninput="calcAnnual()"></td><td style="font-size:11px;color:#888">税法不认</td></tr>
+    <tr><td>研发加计扣除（调减）</td><td style="text-align:right"><input type="number" id="adjRD" value="0" style="width:120px" oninput="calcAnnual()"></td><td style="font-size:11px;color:#888">100%加计</td></tr>
+  </table>
+  <div class="result" id="annualResult"></div>
+</div>
+
+<script>
+function calc(){
+  const quarter=parseInt(document.getElementById('quarter').value);
+  const rate=parseFloat(document.getElementById('rate').value);
+  const cumProfit=parseFloat(document.getElementById('cumProfit').value)||0;
+  const prevPaid=parseFloat(document.getElementById('prevPaid').value)||0;
+  const exempt=parseFloat(document.getElementById('exemptIncome').value)||0;
+  const lossComp=parseFloat(document.getElementById('lossComp').value)||0;
+
+  const taxable=cumProfit-exempt-lossComp;
+  const totalTax=taxable>0?taxable*rate:0;
+  const due=totalTax-prevPaid;
+
+  document.getElementById('citResult').innerHTML=`
+    <p>第${quarter}季度 | 税率：${(rate*100).toFixed(0)}%</p>
+    <p>本年累计利润：<strong>¥${cumProfit.toFixed(2)}</strong></p>
+    <p>减：不征税/免税收入 ¥${exempt.toFixed(2)} | 弥补亏损 ¥${lossComp.toFixed(2)}</p>
+    <p>应纳税所得额：<strong>¥${taxable.toFixed(2)}</strong></p>
+    <p>累计应纳所得税：<span class="num">¥${totalTax.toFixed(2)}</span></p>
+    <p>减：已预缴 ¥${prevPaid.toFixed(2)}</p>
+    <hr style="margin:8px 0">
+    <p>本季度应补缴：<span class="num" style="color:${due>0?'#A32D2D':'#0F6E56'}">¥${due.toFixed(2)}</span> ${due>0?'':'（多缴留抵）'}</p>
+    <p style="font-size:11px;color:#888;margin-top:4px">分录：借 所得税费用 ${due>0?due.toFixed(2):'0.00'} / 贷 应交税费-应交所得税 ${due>0?due.toFixed(2):'0.00'}</p>`;
+}
+
+function calcAnnual(){
+  const cumProfit=parseFloat(document.getElementById('cumProfit').value)||0;
+  const rate=parseFloat(document.getElementById('rate').value);
+  const adjE=parseFloat(document.getElementById('adjEntertain').value)||0;
+  const adjA=parseFloat(document.getElementById('adjAd').value)||0;
+  const adjP=parseFloat(document.getElementById('adjPenalty').value)||0;
+  const adjRD=parseFloat(document.getElementById('adjRD').value)||0;
+
+  const taxable=cumProfit+adjE+adjA+adjP-adjRD;
+  const tax=taxable>0?taxable*rate:0;
+  document.getElementById('annualResult').innerHTML=`
+    <p>会计利润：¥${cumProfit.toFixed(2)}</p>
+    <p>+ 纳税调增：¥${(adjE+adjA+adjP).toFixed(2)}（招待¥${adjE} + 广宣¥${adjA} + 罚款¥${adjP}）</p>
+    <p>− 纳税调减：¥${adjRD.toFixed(2)}（研发加计）</p>
+    <p>应纳税所得额：<strong>¥${taxable.toFixed(2)}</strong></p>
+    <p>应纳所得税：<span class="num">¥${tax.toFixed(2)}</span></p>`;
+  document.getElementById('annualCard').style.display='block';
+}
+calc();
+</script>
+</body>
+</html>

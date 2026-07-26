@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>个税工资计算器</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Microsoft YaHei',sans-serif;max-width:750px;margin:0 auto;padding:24px;color:#2c2c2a;background:#f5f5f5}
+h1{font-size:22px;margin-bottom:4px}.sub{color:#888;font-size:13px;margin-bottom:20px}
+.card{background:#fff;border-radius:10px;padding:18px;margin-bottom:16px;border:1px solid #e0e0e0}
+.card h2{font-size:15px;margin-bottom:10px;color:#185FA5}
+.btn-back{background:#888;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;margin-bottom:16px}
+label{font-size:12px;color:#888;margin:6px 0 2px;display:block}
+input,select{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px}
+button{padding:10px 20px;background:#378ADD;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;margin-top:12px}
+button:hover{background:#185FA5}
+.flex2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.result{background:#f8f8f8;padding:16px;border-radius:8px;margin-top:12px;font-size:14px;line-height:2.2}
+.result .num{font-size:20px;font-weight:600;color:#A32D2D}
+.result .ok{color:#0F6E56}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+th{background:#f0f0f0;padding:8px;text-align:left;font-weight:600;color:#555}
+td{padding:7px 8px;border-bottom:1px solid #eee}
+</style>
+</head>
+<body>
+<button class="btn-back" onclick="location.href='index.html'">← 返回首页</button>
+<h1>个税工资计算器</h1>
+<p class="sub">累计预扣法 — 填月工资自动算每月个税</p>
+
+<div class="card">
+  <h2>1. 基本信息</h2>
+  <div class="flex2">
+    <div><label>月税前工资</label><input type="number" id="salary" value="15000" oninput="calc()"></div>
+    <div><label>社保公积金（个人部分/月）</label><input type="number" id="socialIns" value="3000" oninput="calc()"></div>
+  </div>
+  <div class="flex2">
+    <div><label>专项附加扣除/月</label><input type="number" id="spDeduction" value="3000" placeholder="子女教育+房贷+赡养老人等合计"></div>
+    <div><label>当前月份（1-12）</label><select id="month" onchange="calc()"><option value="1">1月</option><option value="2">2月</option><option value="3">3月</option><option value="4">4月</option><option value="5">5月</option><option value="6">6月</option><option value="7">7月</option><option value="8">8月</option><option value="9">9月</option><option value="10">10月</option><option value="11">11月</option><option value="12">12月</option></select></div>
+  </div>
+  <button onclick="showAllMonths()">显示全年12个月明细</button>
+</div>
+
+<div class="card">
+  <h2>2. 本月计算</h2>
+  <div class="result" id="monthResult"><p>请输入数据后自动计算</p></div>
+</div>
+
+<div class="card" id="allMonthsCard" style="display:none">
+  <h2>3. 全年累计明细</h2>
+  <div id="allMonthsTable"></div>
+</div>
+
+<script>
+// Tax brackets
+const BRACKETS=[[0,36000,0.03,0],[36000,144000,0.1,2520],[144000,300000,0.2,16920],[300000,420000,0.25,31920],[420000,660000,0.3,52920],[660000,960000,0.35,85920],[960000,Infinity,0.45,181920]];
+
+function calcTax(cumulativeTaxable){for(const[b,ub,r,qd]of BRACKETS){if(cumulativeTaxable<=ub)return cumulativeTaxable*r-qd}return 0}
+
+function calcSingle(month,salary,social,spDed){
+  const basicDed=5000;
+  const monthlyTaxable=salary-social-spDed-basicDed;
+  const cumulative=monthlyTaxable*month;
+  const cumulativeTax=calcTax(cumulative);
+  let prevTax=0;
+  if(month>1){
+    const prevCum=monthlyTaxable*(month-1);
+    prevTax=calcTax(prevCum);
+  }
+  return {monthlyTaxable,cumulative,cumulativeTax,monthTax:cumulativeTax-prevTax,prevTax,netPay:salary-social-(cumulativeTax-prevTax)};
+}
+
+function calc(){
+  const salary=parseFloat(document.getElementById('salary').value)||0;
+  const social=parseFloat(document.getElementById('socialIns').value)||0;
+  const spDed=parseFloat(document.getElementById('spDeduction').value)||0;
+  const month=parseInt(document.getElementById('month').value);
+
+  const r=calcSingle(month,salary,social,spDed);
+  document.getElementById('monthResult').innerHTML=`
+    <p>税前工资：<strong>¥${salary.toFixed(2)}</strong> | 社保公积金：¥${social.toFixed(2)} | 专项扣除：¥${spDed.toFixed(2)}</p>
+    <p>减除费用（起征点）：¥5,000.00/月</p>
+    <p>本月应纳税所得额：<strong>¥${r.monthlyTaxable.toFixed(2)}</strong></p>
+    <p>累计应纳税所得额（${month}个月）：<strong>¥${r.cumulative.toFixed(2)}</strong></p>
+    <hr style="margin:8px 0">
+    <p>累计应纳个税：<span style="font-size:16px">¥${r.cumulativeTax.toFixed(2)}</span></p>
+    <p>已预缴个税：<span style="font-size:16px">¥${r.prevTax.toFixed(2)}</span></p>
+    <p>本月应扣个税：<span class="num">¥${r.monthTax.toFixed(2)}</span></p>
+    <p>本月实发工资：<span class="ok" style="font-size:20px;font-weight:600">¥${r.netPay.toFixed(2)}</span></p>
+    <p style="font-size:11px;color:#888">分录：借 应付职工薪酬 ${salary.toFixed(2)} / 贷 银行存款 ${r.netPay.toFixed(2)} 其他应付款-社保 ${social.toFixed(2)} 应交税费-个税 ${r.monthTax.toFixed(2)}</p>`;
+}
+
+function showAllMonths(){
+  const salary=parseFloat(document.getElementById('salary').value)||0;
+  const social=parseFloat(document.getElementById('socialIns').value)||0;
+  const spDed=parseFloat(document.getElementById('spDeduction').value)||0;
+  let html=`<table><tr><th>月份</th><th>累计应纳税所得额</th><th style="text-align:right">累计个税</th><th style="text-align:right">已预缴</th><th style="text-align:right">本月个税</th><th style="text-align:right">实发工资</th></tr>`;
+  let cumTax=0;
+  for(let m=1;m<=12;m++){
+    const r=calcSingle(m,salary,social,spDed);
+    html+=`<tr><td>${m}月</td><td>${r.cumulative.toFixed(2)}</td><td style="text-align:right">${r.cumulativeTax.toFixed(2)}</td><td style="text-align:right">${r.prevTax.toFixed(2)}</td><td style="text-align:right;font-weight:500;color:#A32D2D">${r.monthTax.toFixed(2)}</td><td style="text-align:right;color:#0F6E56">${r.netPay.toFixed(2)}</td></tr>`;
+  }
+  html+='</table>';
+  document.getElementById('allMonthsTable').innerHTML=html;
+  document.getElementById('allMonthsCard').style.display='block';
+  document.getElementById('allMonthsCard').scrollIntoView({behavior:'smooth'});
+}
+calc();
+</script>
+</body>
+</html>
