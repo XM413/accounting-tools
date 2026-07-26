@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>银行对账匹配器</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family: -apple-system,'Microsoft YaHei',sans-serif; max-width:900px; margin:0 auto; padding:24px; color:#2c2c2a; background:#f5f5f5; }
+  h1 { font-size:22px; margin-bottom:4px; }
+  .sub { color:#888; font-size:13px; margin-bottom:20px; }
+  .card { background:#fff; border-radius:10px; padding:18px; margin-bottom:16px; border:1px solid #e0e0e0; }
+  .card h2 { font-size:15px; margin-bottom:10px; color:#185FA5; }
+  .flex { display:flex; gap:12px; flex-wrap:wrap; }
+  .flex>div { flex:1; min-width:200px; }
+  label { display:block; font-size:12px; color:#888; margin:8px 0 4px; }
+  input[type=file],select { width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:13px; }
+  button { padding:10px 20px; background:#378ADD; color:#fff; border:none; border-radius:6px; font-size:14px; cursor:pointer; margin-top:12px; }
+  button:hover { background:#185FA5; }
+  .btn-sm { padding:6px 14px; font-size:12px; margin-top:8px; }
+  .btn-load { background:#0F6E56; }
+  .btn-load:hover { background:#085041; }
+  table { width:100%; border-collapse:collapse; font-size:12px; margin-top:10px; }
+  th { background:#f0f0f0; padding:8px; text-align:left; font-weight:600; color:#555; border-bottom:2px solid #ddd; }
+  td { padding:7px 8px; border-bottom:1px solid #eee; }
+  .match { background:#eaf7ea; }
+  .mismatch { background:#fdf0f0; }
+  .unmatched { background:#fffdf0; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:500; }
+  .badge-ok { background:#e6f7e6; color:#0F6E56; }
+  .badge-warn { background:#fef9f0; color:#854F0B; }
+  .badge-err { background:#fcebeb; color:#A32D2D; }
+  .summary { display:flex; gap:16px; margin:12px 0; flex-wrap:wrap; }
+  .summary-item { flex:1; min-width:140px; background:#f8f8f8; padding:12px; border-radius:8px; text-align:center; }
+  .summary-item .num { font-size:28px; font-weight:600; }
+  .summary-item .lbl { font-size:11px; color:#888; }
+  .tab-btn { padding:8px 16px; border:1px solid #ddd; background:#fff; cursor:pointer; font-size:13px; border-radius:6px 6px 0 0; margin-right:4px; }
+  .tab-btn.active { background:#378ADD; color:#fff; border-color:#378ADD; }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+  textarea { width:100%; height:60px; font-size:11px; font-family:monospace; padding:8px; border:1px solid #ddd; border-radius:6px; margin-top:8px; }
+</style>
+</head>
+<body>
+
+<h1>银行对账匹配器</h1>
+<p class="sub">上传银行对账单和公司账面日记账 → 自动匹配 → 导出差异表</p>
+
+<!-- Data Input -->
+<div class="card">
+  <h2>1. 数据导入</h2>
+  <div class="flex">
+    <div>
+      <label>银行对账单（CSV 或 Excel）</label>
+      <input type="file" id="bankFile" accept=".csv,.xls,.xlsx">
+      <button class="btn-sm btn-load" onclick="loadDemoBank()">加载模拟银行数据</button>
+    </div>
+    <div>
+      <label>公司日记账（CSV 或 Excel）</label>
+      <input type="file" id="companyFile" accept=".csv,.xls,.xlsx">
+      <button class="btn-sm btn-load" onclick="loadDemoCompany()">加载模拟公司数据</button>
+    </div>
+  </div>
+  <label>金额容差（元）<input type="number" id="tolerance" value="5" min="0" style="width:120px;display:inline;margin-left:8px;"></label>
+  <label>日期容差（天）<input type="number" id="dateTolerance" value="3" min="0" style="width:120px;display:inline;margin-left:8px;"></label>
+  <br>
+  <button onclick="runReconciliation()">开始匹配</button>
+</div>
+
+<!-- Results -->
+<div class="card" id="resultsCard" style="display:none;">
+  <h2>2. 匹配结果</h2>
+  <div class="summary" id="summary"></div>
+  
+  <div style="margin-top:8px;">
+    <button class="tab-btn active" onclick="showTab('all')">全部</button>
+    <button class="tab-btn" onclick="showTab('matched')">已匹配</button>
+    <button class="tab-btn" onclick="showTab('unmatchedBank')">银行未匹配</button>
+    <button class="tab-btn" onclick="showTab('unmatchedCompany')">公司未匹配</button>
+  </div>
+  
+  <div class="tab-content active" id="tab-all"></div>
+  <div class="tab-content" id="tab-matched"></div>
+  <div class="tab-content" id="tab-unmatchedBank"></div>
+  <div class="tab-content" id="tab-unmatchedCompany"></div>
+
+  <button onclick="exportExcel()" style="margin-top:12px;">导出差异表 Excel</button>
+  <button onclick="exportCSV()" style="margin-top:12px;background:#888;margin-left:8px;">导出 CSV</button>
+  <textarea id="csvOutput" readonly placeholder="CSV内容会显示在这里..." style="height:80px;"></textarea>
+</div>
+
+<script>
+// ---- Demo Data ----
+const DEMO_BANK = `日期,摘要,借方,贷方,余额
+2026-07-01,收到甲公司货款,0,50000,1130000
+2026-07-02,支付YY供应商货款,80000,0,1050000
+2026-07-03,收到乙公司服务费,0,32000,1082000
+2026-07-05,缴纳上月增值税,42000,0,1040000
+2026-07-08,代发员工工资,120000,0,920000
+2026-07-12,收到丙公司预付款,0,200000,1120000
+2026-07-15,支付办公室房租,36000,0,1084000
+2026-07-20,收到丁公司设备款,0,150000,1234000
+2026-07-25,购买固定资产设备,85000,0,1149000
+2026-07-28,收到银行季度利息,0,3000,1152000
+2026-07-31,银行划扣账户管理费,300,0,1151700
+2026-07-31,银行代扣电费,12700,0,1139000`;
+
+const DEMO_COMPANY = `日期,凭证号,摘要,借方,贷方,余额
+2026-07-01,记-001,收到甲公司货款,0,50000,1130000
+2026-07-02,记-002,支付YY供应商货款,80000,0,1050000
+2026-07-03,记-003,收到乙公司服务费,0,32000,1082000
+2026-07-05,记-004,缴纳上月增值税,42000,0,1040000
+2026-07-08,记-005,代发员工工资,120000,0,920000
+2026-07-12,记-006,收到丙公司预付款,0,200000,1120000
+2026-07-15,记-007,支付办公室房租,36000,0,1084000
+2026-07-20,记-008,收到丁公司设备款,0,150000,1234000
+2026-07-25,记-009,购买固定资产设备,85000,0,1149000
+2026-07-28,记-010,支付供应商尾款,50000,0,1102000`;
+
+let bankData = [], companyData = [], results = [];
+
+function parseCSV(csv) {
+  const lines = csv.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim());
+  return lines.slice(1).map(line => {
+    const vals = line.split(',');
+    const obj = {};
+    headers.forEach((h,i) => obj[h] = (vals[i]||'').trim());
+    return obj;
+  });
+}
+
+function loadDemoBank() {
+  document.getElementById('resultsCard').style.display = 'none';
+  bankData = parseCSV(DEMO_BANK);
+  alert(`已加载模拟银行对账单：${bankData.length} 笔`);
+}
+
+function loadDemoCompany() {
+  document.getElementById('resultsCard').style.display = 'none';
+  companyData = parseCSV(DEMO_COMPANY);
+  alert(`已加载模拟公司账面日记账：${companyData.length} 笔`);
+}
+
+function handleFile(file, target) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      let data;
+      const name = file.name.toLowerCase();
+      if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+        // Parse Excel
+        const wb = XLSX.read(e.target.result, {type:'array'});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(ws, {header:1});
+        const headers = json[0].map(h => String(h||'').trim());
+        data = json.slice(1).filter(r => r.length > 0).map(row => {
+          const obj = {};
+          headers.forEach((h,i) => obj[h] = String(row[i]||'').trim());
+          return obj;
+        });
+      } else {
+        // Parse CSV
+        data = parseCSV(e.target.result);
+      }
+      if (target === 'bank') bankData = data;
+      else companyData = data;
+      resolve(data);
+    };
+    if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.readAsText(file);
+    }
+  });
+}
+
+document.getElementById('bankFile').addEventListener('change', async function(e){
+  await handleFile(e.target.files[0], 'bank');
+  document.getElementById('resultsCard').style.display = 'none';
+  const ext = e.target.files[0].name.split('.').pop().toUpperCase();
+  alert(`已导入银行对账单（${ext}）：${bankData.length} 笔`);
+});
+document.getElementById('companyFile').addEventListener('change', async function(e){
+  await handleFile(e.target.files[0], 'company');
+  document.getElementById('resultsCard').style.display = 'none';
+  const ext2 = e.target.files[0].name.split('.').pop().toUpperCase();
+  alert(`已导入公司日记账（${ext2}）：${companyData.length} 笔`);
+});
+
+function getAmount(row) {
+  const dr = parseFloat(row['借方']||row['借方(支出)']||0);
+  const cr = parseFloat(row['贷方']||row['贷方(收入)']||0);
+  return dr > 0 ? -dr : cr; // negative=支出, positive=收入
+}
+
+function getDate(row) {
+  const d = row['日期'];
+  if (!d) return null;
+  const parts = d.split(/[-\/]/);
+  return new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+}
+
+function runReconciliation() {
+  if (!bankData.length || !companyData.length) {
+    alert('请先加载银行对账单和公司日记账数据！');
+    return;
+  }
+
+  const tolAmt = parseFloat(document.getElementById('tolerance').value) || 0;
+  const tolDate = parseInt(document.getElementById('dateTolerance').value) || 0;
+  results = [];
+  const matchedBank = new Set();
+  const matchedCompany = new Set();
+
+  // For each company transaction, try to find a match in bank data
+  companyData.forEach((crow, ci) => {
+    const cAmt = getAmount(crow);
+    const cDate = getDate(crow);
+    let bestMatch = null, bestScore = Infinity;
+
+    bankData.forEach((brow, bi) => {
+      if (matchedBank.has(bi)) return;
+      const bAmt = getAmount(brow);
+      const bDate = getDate(brow);
+      
+      const amtDiff = Math.abs(cAmt - bAmt);
+      const dateDiff = cDate && bDate ? Math.abs(cDate - bDate) / (1000*60*60*24) : 0;
+      
+      if (amtDiff <= tolAmt && dateDiff <= tolDate) {
+        const score = amtDiff + dateDiff * 0.1;
+        if (score < bestScore) { bestScore = score; bestMatch = bi; }
+      }
+    });
+
+    if (bestMatch !== null) {
+      matchedBank.add(bestMatch);
+      matchedCompany.add(ci);
+      results.push({
+        date: crow['日期'],
+        desc: crow['摘要'] || crow['描述'],
+        amount: Math.abs(cAmt),
+        direction: cAmt > 0 ? '收入' : '支出',
+        match: 'matched',
+        detail: '已匹配'
+      });
+    } else {
+      results.push({
+        date: crow['日期'],
+        desc: crow['摘要'] || crow['描述'],
+        amount: Math.abs(cAmt),
+        direction: cAmt > 0 ? '收入' : '支出',
+        match: 'unmatchedCompany',
+        detail: '公司有、银行无（可能未兑现/在途）'
+      });
+    }
+  });
+
+  // Add unmatched bank transactions
+  bankData.forEach((brow, bi) => {
+    if (!matchedBank.has(bi)) {
+      const bAmt = getAmount(brow);
+      results.push({
+        date: brow['日期'],
+        desc: brow['摘要'] || brow['描述'],
+        amount: Math.abs(bAmt),
+        direction: bAmt > 0 ? '收入' : '支出',
+        match: 'unmatchedBank',
+        detail: '银行有、公司无（代扣/利息/未通知）'
+      });
+    }
+  });
+
+  // Display results
+  const matched = results.filter(r => r.match === 'matched');
+  const unBank = results.filter(r => r.match === 'unmatchedBank');
+  const unComp = results.filter(r => r.match === 'unmatchedCompany');
+
+  document.getElementById('summary').innerHTML = `
+    <div class="summary-item"><div class="num" style="color:#0F6E56;">${matched.length}</div><div class="lbl">已匹配</div></div>
+    <div class="summary-item"><div class="num" style="color:#854F0B;">${unBank.length}</div><div class="lbl">银行未达账</div></div>
+    <div class="summary-item"><div class="num" style="color:#A32D2D;">${unComp.length}</div><div class="lbl">公司未达账</div></div>
+    <div class="summary-item"><div class="num">${bankData.length+companyData.length-matched.length}</div><div class="lbl">总差异项</div></div>
+  `;
+
+  renderTab('all', results);
+  renderTab('matched', matched);
+  renderTab('unmatchedBank', unBank);
+  renderTab('unmatchedCompany', unComp);
+
+  document.getElementById('resultsCard').style.display = 'block';
+  document.getElementById('resultsCard').scrollIntoView({behavior:'smooth'});
+}
+
+function renderTab(tabId, data) {
+  const rows = data.map(r => `
+    <tr class="${r.match}">
+      <td>${r.date}</td>
+      <td>${r.desc}</td>
+      <td style="text-align:right;">${r.amount.toFixed(2)}</td>
+      <td style="text-align:center;">${r.direction}</td>
+      <td><span class="badge ${r.match==='matched'?'badge-ok':r.match==='unmatchedBank'?'badge-warn':'badge-err'}">${r.detail}</span></td>
+    </tr>`).join('');
+
+  document.getElementById('tab-'+tabId).innerHTML = `
+    <table><thead><tr><th>日期</th><th>摘要</th><th style="text-align:right;">金额</th><th style="text-align:center;">方向</th><th>状态</th></tr></thead><tbody>${rows}</tbody></table>
+    <p style="font-size:11px;color:#888;margin-top:6px;">共 ${data.length} 笔</p>`;
+}
+
+let currentTab = 'all';
+function showTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector(`.tab-btn:nth-child(${{all:1,matched:2,unmatchedBank:3,unmatchedCompany:4}[tab]})`).classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+}
+
+function exportExcel() {
+  const wb = XLSX.utils.book_new();
+  
+  // Sheet 1: 余额调节表
+  const matched = results.filter(r => r.match === 'matched').length;
+  const unBank = results.filter(r => r.match === 'unmatchedBank');
+  const unComp = results.filter(r => r.match === 'unmatchedCompany');
+  const bankUnrecIn = unBank.filter(r => r.direction === '收入');
+  const bankUnrecOut = unBank.filter(r => r.direction === '支出');
+  const compUnrecIn = unComp.filter(r => r.direction === '收入');
+  const compUnrecOut = unComp.filter(r => r.direction === '支出');
+
+  const reconData = [
+    ['银行存款余额调节表', '', '', ''],
+    ['对账日期：' + new Date().toLocaleDateString(), '', '', ''],
+    ['', '', '', ''],
+    ['企业银行存款日记账', '', '银行对账单', ''],
+    ['账面余额', '', '对账单余额', ''],
+    ['加：银行已收、企业未收', '', '加：企业已收、银行未收', ''],
+  ];
+  const maxLen = Math.max(bankUnrecIn.length, compUnrecIn.length);
+  for (let i = 0; i < maxLen; i++) {
+    const bui = bankUnrecIn[i] ? `${bankUnrecIn[i].desc} ${bankUnrecIn[i].amount}` : '';
+    const cui = compUnrecIn[i] ? `${compUnrecIn[i].desc} ${compUnrecIn[i].amount}` : '';
+    reconData.push([bui ? '+'+bankUnrecIn[i].amount : '', '', cui ? '+'+compUnrecIn[i].amount : '', '']);
+  }
+  reconData.push(['减：银行已付、企业未付', '', '减：企业已付、银行未付', '']);
+  const maxLen2 = Math.max(bankUnrecOut.length, compUnrecOut.length);
+  for (let i = 0; i < maxLen2; i++) {
+    const buo = bankUnrecOut[i] ? `${bankUnrecOut[i].desc} ${bankUnrecOut[i].amount}` : '';
+    const cuo = compUnrecOut[i] ? `${compUnrecOut[i].desc} ${compUnrecOut[i].amount}` : '';
+    reconData.push([buo ? '-'+bankUnrecOut[i].amount : '', '', cuo ? '-'+compUnrecOut[i].amount : '', '']);
+  }
+  reconData.push(['', '', '', '']);
+  reconData.push(['调节后余额', '', '调节后余额', '']);
+  reconData.push(['双方调节后余额一致' + (bankUnrecIn.length===0&&bankUnrecOut.length===0&&compUnrecIn.length===0&&compUnrecOut.length===0?' ✓':'（见未达账项明细）'), '', '', '']);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(reconData);
+  ws1['!cols'] = [{wch:30},{wch:15},{wch:30},{wch:15}];
+  XLSX.utils.book_append_sheet(wb, ws1, '余额调节表');
+
+  // Sheet 2: 差异明细
+  const diffData = [['日期','摘要','金额','方向','状态','处理建议']];
+  results.filter(r => r.match !== 'matched').forEach(r => {
+    let suggestion = '';
+    if (r.match === 'unmatchedBank' && r.direction === '支出') suggestion = '补记入账：借费用/贷银行存款';
+    else if (r.match === 'unmatchedBank' && r.direction === '收入') suggestion = '补记入账：借银行存款/贷应收/收入';
+    else if (r.match === 'unmatchedCompany' && r.direction === '支出') suggestion = '次月跟踪（未兑现支票/在途付款）';
+    else if (r.match === 'unmatchedCompany' && r.direction === '收入') suggestion = '次月跟踪（在途收款）';
+    diffData.push([r.date, r.desc, r.amount, r.direction, r.detail, suggestion]);
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(diffData);
+  ws2['!cols'] = [{wch:12},{wch:30},{wch:12},{wch:8},{wch:22},{wch:38}];
+  XLSX.utils.book_append_sheet(wb, ws2, '未达账项明细');
+
+  // Sheet 3: 全部明细
+  const allData = [['日期','摘要','金额','方向','匹配状态']];
+  results.forEach(r => allData.push([r.date, r.desc, r.amount, r.direction, r.detail]));
+  const ws3 = XLSX.utils.aoa_to_sheet(allData);
+  ws3['!cols'] = [{wch:12},{wch:30},{wch:12},{wch:8},{wch:22}];
+  XLSX.utils.book_append_sheet(wb, ws3, '全部明细');
+
+  XLSX.writeFile(wb, '银行对账差异表.xlsx');
+}
+
+function exportCSV() {
+  let csv = '日期,摘要,金额,方向,状态,处理建议\n';
+  results.filter(r => r.match !== 'matched').forEach(r => {
+    let suggestion = '';
+    if (r.match === 'unmatchedBank' && r.direction === '支出') suggestion = '补记入账';
+    else if (r.match === 'unmatchedBank' && r.direction === '收入') suggestion = '补记入账';
+    else if (r.match === 'unmatchedCompany') suggestion = '次月跟踪';
+    csv += `${r.date},${r.desc},${r.amount},${r.direction},${r.detail},${suggestion}\n`;
+  });
+  document.getElementById('csvOutput').value = csv;
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = '对账差异表.csv'; a.click();
+}
+
+// Auto-load demo data on page load
+window.onload = () => {
+  loadDemoBank();
+  loadDemoCompany();
+  runReconciliation();
+};
+</script>
+</body>
+</html>
