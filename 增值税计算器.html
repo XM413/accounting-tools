@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>增值税计算器</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Microsoft YaHei',sans-serif;max-width:700px;margin:0 auto;padding:24px;color:#2c2c2a;background:#f5f5f5}
+h1{font-size:22px;margin-bottom:4px}.sub{color:#888;font-size:13px;margin-bottom:20px}
+.card{background:#fff;border-radius:10px;padding:18px;margin-bottom:16px;border:1px solid #e0e0e0}
+.card h2{font-size:15px;margin-bottom:10px;color:#185FA5}
+.btn-back{background:#888;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;margin-bottom:16px}
+label{display:block;font-size:12px;color:#888;margin:6px 0 2px}
+input,select{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px}
+button{padding:10px 20px;background:#378ADD;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;margin-top:12px}
+button:hover{background:#185FA5}
+.flex2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.result{background:#f8f8f8;padding:16px;border-radius:8px;margin-top:12px;font-size:14px;line-height:2}
+.result .num{font-size:20px;font-weight:600;color:#A32D2D}
+.result .ok{color:#0F6E56}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+th{background:#f0f0f0;padding:8px;text-align:left;font-weight:600;color:#555}
+td{padding:7px 8px;border-bottom:1px solid #eee}
+td input{width:100%;padding:4px;border:1px solid #eee;border-radius:4px;font-size:12px;text-align:right}
+</style>
+</head>
+<body>
+<button class="btn-back" onclick="location.href='index.html'">← 返回首页</button>
+<h1>增值税及附加税费计算器</h1>
+<p class="sub">填入销项和进项 → 自动算应纳增值税及附加税</p>
+
+<div class="card">
+  <h2>1. 收入与税额</h2>
+  <h3 style="font-size:13px;margin:8px 0">销项税额</h3>
+  <table>
+    <tr><th>项目</th><th style="text-align:right">不含税金额</th><th>税率</th><th style="text-align:right">税额</th></tr>
+    <tr><td>主营业务收入(13%)</td><td><input type="number" id="sale13" value="0" oninput="calcVat()"></td><td>13%</td><td style="text-align:right" id="taxSale13">0.00</td></tr>
+    <tr><td>其他业务收入(6%)</td><td><input type="number" id="sale6" value="0" oninput="calcVat()"></td><td>6%</td><td style="text-align:right" id="taxSale6">0.00</td></tr>
+    <tr><td>未开票收入(13%)</td><td><input type="number" id="unbilledSale" value="0" oninput="calcVat()"></td><td>13%</td><td style="text-align:right" id="taxUnbilled">0.00</td></tr>
+    <tr style="font-weight:500;border-top:2px solid #999"><td>销项税额合计</td><td colspan="2"></td><td style="text-align:right;font-size:14px" id="totalOutput">0.00</td></tr>
+  </table>
+
+  <h3 style="font-size:13px;margin:12px 0 8px">进项税额</h3>
+  <table>
+    <tr><th>项目</th><th style="text-align:right">不含税金额</th><th>税率</th><th style="text-align:right">税额</th></tr>
+    <tr><td>采购/商品/设备(13%)</td><td><input type="number" id="purchase13" value="0" oninput="calcVat()"></td><td>13%</td><td style="text-align:right" id="taxPurchase13">0.00</td></tr>
+    <tr><td>运费/服务费(9%/6%)</td><td><input type="number" id="purchase6" value="0" oninput="calcVat()"></td><td>6%</td><td style="text-align:right" id="taxPurchase6">0.00</td></tr>
+    <tr><td>进项税额转出</td><td colspan="2"><input type="number" id="inputTransfer" value="0" oninput="calcVat()" placeholder="职工福利/个人消费等不可抵扣部分"></td><td style="text-align:right;color:#A32D2D" id="taxTransfer">0.00</td></tr>
+    <tr style="font-weight:500;border-top:2px solid #999"><td>进项税额合计</td><td colspan="2"></td><td style="text-align:right;font-size:14px" id="totalInput">0.00</td></tr>
+  </table>
+
+  <label>上期留抵税额 <input type="number" id="prevCredit" value="0" oninput="calcVat()"></label>
+</div>
+
+<div class="card">
+  <h2>2. 计算结果</h2>
+  <div class="result" id="vatResult">
+    <p>请输入数据后点击计算</p>
+  </div>
+  <button onclick="calcVat()">重新计算</button>
+</div>
+
+<script>
+function calcVat(){
+  const g=(id)=>parseFloat(document.getElementById(id).value)||0;
+  const sale13=g('sale13'), sale6=g('sale6'), unbill=g('unbilledSale');
+  const pur13=g('purchase13'), pur6=g('purchase6'), transfer=g('inputTransfer'), credit=g('prevCredit');
+
+  const outTax=sale13*0.13+sale6*0.06+unbill*0.13;
+  const inTax=pur13*0.13+pur6*0.06;
+  const netInTax=inTax+transfer; // transfer is NOT a deduction - it adds to VAT payable
+  const vatPayable=outTax-netInTax-credit;
+
+  document.getElementById('taxSale13').textContent=(sale13*0.13).toFixed(2);
+  document.getElementById('taxSale6').textContent=(sale6*0.06).toFixed(2);
+  document.getElementById('taxUnbilled').textContent=(unbill*0.13).toFixed(2);
+  document.getElementById('totalOutput').textContent=outTax.toFixed(2);
+  document.getElementById('taxPurchase13').textContent=(pur13*0.13).toFixed(2);
+  document.getElementById('taxPurchase6').textContent=(pur6*0.06).toFixed(2);
+  document.getElementById('taxTransfer').textContent=transfer.toFixed(2);
+  document.getElementById('totalInput').textContent=inTax.toFixed(2);
+
+  const urban=vatPayable>0?vatPayable*0.07:0;
+  const edu=vatPayable>0?vatPayable*0.03:0;
+  const localEdu=vatPayable>0?vatPayable*0.02:0;
+  const totalTax=vatPayable>0?vatPayable+urban+edu+localEdu:0;
+
+  document.getElementById('vatResult').innerHTML=`
+    <p>销项税额：<span style="font-size:16px">¥${outTax.toFixed(2)}</span></p>
+    <p>进项税额：<span style="font-size:16px">¥${inTax.toFixed(2)}</span> <span style="color:#A32D2D;font-size:12px">+ 进项转出 ¥${transfer.toFixed(2)}</span></p>
+    <p>减：上期留抵 ¥${credit.toFixed(2)}</p>
+    <hr style="margin:8px 0">
+    <p>应纳增值税：<span class="num">¥${vatPayable>0?vatPayable.toFixed(2):'0.00（留抵 '+Math.abs(vatPayable).toFixed(2)+'）'}</span></p>
+    <p>城建税(7%)：¥${urban.toFixed(2)} | 教育费附加(3%)：¥${edu.toFixed(2)} | 地方教育附加(2%)：¥${localEdu.toFixed(2)}</p>
+    <p style="margin-top:8px">附加税费合计：<span class="num">¥${(urban+edu+localEdu).toFixed(2)}</span></p>
+    <p style="margin-top:8px;font-size:16px">本月应交税费总计：<span class="num" style="color:${totalTax>0?'#A32D2D':'#0F6E56'}">¥${totalTax.toFixed(2)}</span></p>
+    <p style="font-size:11px;color:#888;margin-top:4px">（不含企业所得税和个人所得税）</p>`;
+}
+</script>
+</body>
+</html>

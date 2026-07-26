@@ -14,23 +14,33 @@ h1{font-size:24px;margin-bottom:4px}
 .tool h2{font-size:16px;color:#185FA5;margin-bottom:6px}
 .tool p{font-size:13px;color:#666;line-height:1.6}
 .tool .tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;margin-top:8px}
-.tag-bank{background:#e6f7e6;color:#0F6E56}.tag-ar{background:#fdf0e6;color:#854F0B}.tag-audit{background:#f0e6fd;color:#534AB7}
+.tag-bank{background:#e6f7e6;color:#0F6E56}.tag-ar{background:#fdf0e6;color:#854F0B}.tag-tax{background:#f0e6fd;color:#534AB7}.tag-cash{background:#e6f4ff;color:#185FA5}
 </style>
 </head>
 <body>
 <h1>会计实用工具集</h1>
-<p class="sub">两个日常高频工具，上传 Excel 就能用。全部在浏览器里跑，不传服务器。</p>
+<p class="sub">四个日常高频工具，上传 Excel 或直接输入就能用。全部在浏览器里跑，不传服务器。</p>
 
 <div class="grid">
   <a href="银行对账匹配器.html" class="tool">
     <h2>银行对账匹配器</h2>
     <p>上传银行对账单和公司日记账，自动匹配找出未达账项，导出余额调节表</p>
-    <span class="tag tag-bank">出纳</span>
+    <span class="tag tag-bank">出纳/总账</span>
   </a>
   <a href="账龄分析坏账计提.html" class="tool">
     <h2>账龄分析与坏账计提</h2>
     <p>上传应收明细，自动算账龄天数、划分区间、计提坏账准备</p>
     <span class="tag tag-ar">AR</span>
+  </a>
+  <a href="现金盘点计算器.html" class="tool">
+    <h2>现金盘点计算器</h2>
+    <p>输入各面额张数 → 自动算总额 → 比对账面余额 → 打印盘点表</p>
+    <span class="tag tag-cash">出纳</span>
+  </a>
+  <a href="增值税计算器.html" class="tool">
+    <h2>增值税及附加计算器</h2>
+    <p>填写销项进项 → 自动算应纳增值税、城建税、教育费附加</p>
+    <span class="tag tag-tax">税务</span>
   </a>
 </div>
 </body>

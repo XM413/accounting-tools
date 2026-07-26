@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>现金盘点计算器</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Microsoft YaHei',sans-serif;max-width:700px;margin:0 auto;padding:24px;color:#2c2c2a;background:#f5f5f5}
+h1{font-size:22px;margin-bottom:4px}.sub{color:#888;font-size:13px;margin-bottom:20px}
+.card{background:#fff;border-radius:10px;padding:18px;margin-bottom:16px;border:1px solid #e0e0e0}
+.card h2{font-size:15px;margin-bottom:10px;color:#185FA5}
+.btn-back{background:#888;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;margin-bottom:16px}
+.btn-back:hover{background:#666}
+label{display:block;font-size:12px;color:#888;margin:6px 0 2px}
+input,textarea{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;margin-bottom:4px}
+textarea{height:80px;font-family:monospace;font-size:12px}
+button{padding:10px 20px;background:#378ADD;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;margin-top:12px}
+button:hover{background:#185FA5}
+.flex{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.flex>div{flex:1;min-width:80px}
+.result{background:#f0fdf4;padding:14px;border-radius:8px;margin-top:12px;font-size:14px}
+.result .big{font-size:28px;font-weight:600;color:#0F6E56}
+.result .diff{color:#A32D2D}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+th{background:#f0f0f0;padding:8px;text-align:left;font-weight:600;color:#555;border-bottom:1px solid #ddd}
+td{padding:6px 8px;border-bottom:1px solid #eee}
+td input{width:100%;padding:4px;border:1px solid #eee;border-radius:4px;font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+<button class="btn-back" onclick="location.href='index.html'">← 返回首页</button>
+<h1>现金盘点计算器</h1>
+<p class="sub">输入各面额张数 → 自动算金额 → 比对账面</p>
+
+<div class="card">
+  <h2>1. 库存现金盘点</h2>
+  <table>
+    <tr><th>面额</th><th>张数</th><th style="text-align:right">金额</th></tr>
+    <tr><td>100元</td><td><input type="number" id="q100" value="0" min="0" oninput="calc()"></td><td style="text-align:right" id="a100">0.00</td></tr>
+    <tr><td>50元</td><td><input type="number" id="q50" value="0" min="0" oninput="calc()"></td><td style="text-align:right" id="a50">0.00</td></tr>
+    <tr><td>20元</td><td><input type="number" id="q20" value="0" min="0" oninput="calc()"></td><td style="text-align:right" id="a20">0.00</td></tr>
+    <tr><td>10元</td><td><input type="number" id="q10" value="0" min="0" oninput="calc()"></td><td style="text-align:right" id="a10">0.00</td></tr>
+    <tr><td>5元</td><td><input type="number" id="q5" value="0" min="0" oninput="calc()"></td><td style="text-align:right" id="a5">0.00</td></tr>
+    <tr><td>1元</td><td><input type="number" id="q1" value="0" min="0" oninput="calc()"></td><td style="text-align:right" id="a1">0.00</td></tr>
+    <tr><td>5角</td><td><input type="number" id="q05" value="0" min="0" oninput="calc()"></td><td style="text-align:right" id="a05">0.00</td></tr>
+    <tr><td>1角</td><td><input type="number" id="q01" value="0" min="0" oninput="calc()"></td><td style="text-align:right" id="a01">0.00</td></tr>
+    <tr style="font-weight:500;border-top:2px solid #999"><td>合计</td><td></td><td style="text-align:right;font-size:16px" id="total">0.00</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>2. 账实核对</h2>
+  <label>账面现金余额 <input type="number" id="bookBalance" value="0" step="0.01" oninput="check()"></label>
+  <div class="result" id="checkResult" style="display:none"></div>
+</div>
+
+<div class="card">
+  <h2>3. 盘点记录（可直接打印或截图）</h2>
+  <div id="record"></div>
+  <button onclick="printRecord()">打印盘点表</button>
+</div>
+
+<script>
+function calc(){
+  const denoms={100:'q100',50:'q50',20:'q20',10:'q10',5:'q5',1:'q1',0.5:'q05',0.1:'q01'};
+  let total=0;
+  for(const [d,id] of Object.entries(denoms)){
+    const q=parseInt(document.getElementById(id).value)||0;
+    const amt=q*parseFloat(d);
+    document.getElementById('a'+id.replace('q','')).textContent=amt.toFixed(2);
+    total+=amt;
+  }
+  document.getElementById('total').textContent=total.toFixed(2);
+  check();updateRecord();return total;
+}
+
+function check(){
+  const total=parseFloat(document.getElementById('total').textContent)||0;
+  const book=parseFloat(document.getElementById('bookBalance').value)||0;
+  const diff=total-book;
+  const div=document.getElementById('checkResult');
+  div.style.display='block';
+  if(diff===0) div.innerHTML=`<p>盘点金额：<span class="big">¥${total.toFixed(2)}</span></p><p>账面余额：¥${book.toFixed(2)}</p><p style="color:#0F6E56;font-size:16px;font-weight:500;">✓ 账实相符</p>`;
+  else if(diff>0) div.innerHTML=`<p>盘点金额：<span class="big">¥${total.toFixed(2)}</span></p><p>账面余额：¥${book.toFixed(2)}</p><p class="diff">⚠ 盘盈 +¥${diff.toFixed(2)} — 查明原因后处理：借 库存现金 / 贷 待处理财产损溢</p>`;
+  else div.innerHTML=`<p>盘点金额：<span class="big">¥${total.toFixed(2)}</span></p><p>账面余额：¥${book.toFixed(2)}</p><p class="diff">⚠ 盘亏 ¥${diff.toFixed(2)} — 查明原因后处理：借 待处理财产损溢 / 贷 库存现金</p>`;
+}
+
+function updateRecord(){
+  const now=new Date().toLocaleString();
+  const total=document.getElementById('total').textContent;
+  const book=document.getElementById('bookBalance').value||0;
+  const denoms=[100,50,20,10,5,1,0.5,0.1];
+  let rows='';
+  denoms.forEach(d=>{const q=document.getElementById('q'+String(d).replace('.','')).value||0;rows+=`<tr><td>¥${d}</td><td style="text-align:center">${q}</td><td style="text-align:right">¥${(q*d).toFixed(2)}</td></tr>`});
+  document.getElementById('record').innerHTML=`
+    <p style="font-weight:500;font-size:14px">现金盘点表 — ${now}</p>
+    <table><tr><th>面额</th><th style="text-align:center">张数</th><th style="text-align:right">金额</th></tr>${rows}<tr style="font-weight:500;border-top:2px solid #999"><td>合计</td><td></td><td style="text-align:right;font-size:14px">¥${total}</td></tr></table>
+    <p style="margin-top:8px">账面余额：¥${book} | 差异：${(total-book).toFixed(2)}</p>
+    <p style="color:#888;font-size:11px">盘点人：______  监盘人：______  财务主管：______</p>`;
+}
+
+function printRecord(){window.print()}
+</script>
+</body>
+</html>
